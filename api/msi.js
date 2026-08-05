@@ -4,8 +4,8 @@ const router = express.Router();
 
 // --- CONFIGURATION ---
 const CREDENTIALS = {
-    username: "Mrali077",
-    password: "112233"
+    username: "Shoaibali315",
+    password: "Maryamali315"
 };
 
 const BASE_URL = "http://145.239.130.45/ints";
