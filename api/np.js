@@ -7,9 +7,9 @@ const router = express.Router();
 
 // --- Configuration ---
 const baseURL = "https://tempnumbers.net/NumberPanel";
-const username = "Alisindhi_Z073";
-const password = "Alisindhi_Z073";
-const userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36";
+const username = "Rahman007";
+const password = "Rahman007";
+const userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36";
 
 // --- State Variables ---
 const jar = new CookieJar();
@@ -34,28 +34,58 @@ function getFormattedDate(offsetDays) {
     return d.toISOString().split('T')[0];
 }
 
-/* ================= FIX NUMBERS ================= */
+/* ================= FIX NUMBERS (Smart Mapping) ================= */
 function fixNumbers(data) {
     if (!data || !data.aaData) return data;
-    // Object copy تاکہ اصل ڈیٹا خراب نہ ہو
     const cleanData = { ...data };
-    cleanData.aaData = data.aaData.map(row => [
-        row[1], "", row[3],
-        (row[4] || "").replace(/<[^>]+>/g, "").trim(),
-        (row[7] || "").replace(/<[^>]+>/g, "").trim()
-    ]);
+    cleanData.aaData = data.aaData.map(row => {
+        // کلائنٹ پینل میں row[2] پر نمبر ہے، اگر وہ نہ ملے تو row[1] (پرانا ایجنٹ پینل)
+        const number = (row[2] && row[2].trim() !== "") ? row[2] : (row[1] || "");
+        const range = row[0] || row[3] || "";
+        const plan = (row[3] || row[4] || "").replace(/<[^>]+>/g, "").trim();
+        const stats = (row[5] || row[7] || "").replace(/<[^>]+>/g, "").trim();
+
+        // پرانے فرنٹ اینڈ کا سیم سٹرکچر واپسی ریٹرن ہوگا
+        return [
+            range,
+            "",
+            number,
+            plan,
+            stats
+        ];
+    });
     return cleanData;
 }
 
-/* ================= FIX SMS ================= */
+/* ================= FIX SMS (Smart Mapping) ================= */
 function fixSMS(data) {
     if (!data || !data.aaData) return data;
-    // Object copy
     const cleanData = { ...data };
     cleanData.aaData = data.aaData.map(row => {
-        const message = (row[5] || "").replace(/kamibroken/gi, "").trim();
+        // 7 کالمز والے کلائنٹ پینل میں row[4] پر میسج اور row[6] پر پے آؤٹ ہوتا ہے
+        let message = "";
+        let payout = 0;
+
+        if (row.length <= 7) {
+            message = row[4] || "";
+            payout = row[6] || 0;
+        } else {
+            message = row[5] || "";
+            payout = row[7] || 0;
+        }
+
+        message = message.replace(/kamibroken/gi, "").trim();
         if (!message) return null;
-        return [row[0], row[1], row[2], row[3], message, "$", row[7] || 0];
+
+        return [
+            row[0] || "",
+            row[1] || "",
+            row[2] || "",
+            row[3] || "",
+            message,
+            "$",
+            payout
+        ];
     }).filter(Boolean);
     return cleanData;
 }
@@ -86,8 +116,12 @@ async function doLogin() {
             }
         });
 
-        const resDash = await client.get(`${baseURL}/agent/SMSCDRReports`, {
-            headers: { 'User-Agent': userAgent }
+        // کلائنٹ پینل کے ڈیش بورڈ سے سیشن کی (sesskey) نکالنا
+        const resDash = await client.get(`${baseURL}/client/SMSCDRStats`, {
+            headers: { 
+                'User-Agent': userAgent,
+                'Referer': `${baseURL}/client/MySMSNumbers`
+            }
         });
 
         const sessMatch = resDash.data.match(sessKeyRegex);
@@ -105,21 +139,21 @@ async function doLogin() {
 async function fetchData() {
     if (!isLoggedIn || !sessKey) {
         await doLogin();
-        if (!isLoggedIn) return; // Stop if login fails
+        if (!isLoggedIn) return;
     }
 
-    const yesterdayStr = `${getFormattedDate(-1)}%2000:00:00`;
-    const tomorrowStr = `${getFormattedDate(1)}%2023:59:59`;
+    const todayStr = `${getFormattedDate(0)}%2000:00:00`;
+    const todayEndStr = `${getFormattedDate(0)}%2023:59:59`;
     const timestamp = Date.now();
 
     // --- 1. FETCH SMS DATA ---
-    const smsURL = `${baseURL}/agent/res/data_smscdr.php?fdate1=${yesterdayStr}&fdate2=${tomorrowStr}&frange=&fclient=&fnum=&fcli=&fgdate=&fgmonth=&fgrange=&fgclient=&fgnumber=&fgcli=&fg=0&sesskey=${sessKey}&sEcho=1&iColumns=9&sColumns=%2C%2C%2C%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=50&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=true&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&mDataProp_6=6&sSearch_6=&bRegex_6=false&bSearchable_6=true&bSortable_6=true&mDataProp_7=7&sSearch_7=&bRegex_7=false&bSearchable_7=true&bSortable_7=true&mDataProp_8=8&sSearch_8=&bRegex_8=false&bSearchable_8=true&bSortable_8=false&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=desc&iSortingCols=1&_=${timestamp}`;
+    const smsURL = `${baseURL}/client/res/data_smscdr.php?fdate1=${todayStr}&fdate2=${todayEndStr}&frange=&fnum=&fcli=&fgdate=&fgmonth=&fgrange=&fgnumber=&fgcli=&fg=0&sesskey=${sessKey}&sEcho=1&iColumns=7&sColumns=%2C%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=50&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=true&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&mDataProp_6=6&sSearch_6=&bRegex_6=false&bSearchable_6=true&bSortable_6=true&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=desc&iSortingCols=1&_=${timestamp}`;
 
     try {
         const resSMS = await client.get(smsURL, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
-                'Referer': `${baseURL}/agent/SMSCDRReports`,
+                'Referer': `${baseURL}/client/SMSCDRStats`,
                 'User-Agent': userAgent
             }
         });
@@ -132,7 +166,6 @@ async function fetchData() {
             if (typeof rawData === 'string') {
                 try { rawData = JSON.parse(rawData); } catch(e) {}
             }
-            // سٹرکچر کلین کرنے والا فنکشن کال کر دیا
             smsCache = fixSMS(rawData); 
         }
     } catch (e) {
@@ -141,13 +174,13 @@ async function fetchData() {
 
     // --- 2. FETCH NUMBERS DATA ---
     if (isLoggedIn) {
-        const numURL = `${baseURL}/agent/res/data_smsnumbers2.php?frange=&fclient=&fallocated=&sEcho=2&iColumns=8&sColumns=%2C%2C%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=-1&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=false&bSortable_0=false&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=false&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=false&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=false&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=false&bSortable_5=true&mDataProp_6=6&sSearch_6=&bRegex_6=false&bSearchable_6=false&bSortable_6=true&mDataProp_7=7&sSearch_7=&bRegex_7=false&bSearchable_7=false&bSortable_7=false&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=asc&iSortingCols=1&_=${Date.now()}`;
+        const numURL = `${baseURL}/client/res/data_smsnumbers.php?frange=&fclient=&sEcho=1&iColumns=6&sColumns=%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=-1&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=true&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=asc&iSortingCols=1&_=${Date.now()}`;
 
         try {
             const resNum = await client.get(numURL, {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
-                    'Referer': `${baseURL}/agent/MySMSNumbers2`,
+                    'Referer': `${baseURL}/client/MySMSNumbers`,
                     'User-Agent': userAgent
                 }
             });
@@ -160,7 +193,6 @@ async function fetchData() {
                 if (typeof rawData === 'string') {
                     try { rawData = JSON.parse(rawData); } catch(e) {}
                 }
-                // نمبرز والا سٹرکچر بھی کلین کر دیا
                 numberCache = fixNumbers(rawData); 
             }
         } catch (e) {
@@ -170,8 +202,8 @@ async function fetchData() {
 }
 
 // --- Background Polling ---
-fetchData(); // Initial fetch
-setInterval(fetchData, 17000); // Fetch every 17 seconds
+fetchData();
+setInterval(fetchData, 10000); // 10 سیکنڈز بعد ڈیٹا پول کرے گا
 
 // --- API Route ---
 router.get('/', (req, res) => {
