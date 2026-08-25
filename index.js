@@ -4,6 +4,7 @@ const PORT = process.env.PORT || 3000;
 
 // --- IMPORT ALL PANELS ---
 const np = require("./api/np");
+const ivs = require("./api/ivs");
 const gn = require("./api/gn");
 const ch = require("./api/ch");
 const cs = require("./api/cs");
@@ -13,6 +14,7 @@ const msi = require("./api/msi");// <-- NEW
 
 // --- ROUTES ---
 app.use("/api/np", np);
+app.use("/api/ivs", ivs);
 app.use("/api/gn", gn);
 app.use("/api/ch", ch);
 app.use("/api/cs", cs);
