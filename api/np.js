@@ -6,7 +6,7 @@ const { CookieJar } = require('tough-cookie');
 const router = express.Router();
 
 // --- Configuration ---
-const baseURL = "http://51.89.99.105/NumberPanel";
+const baseURL = "http://tempnumbers.net";
 const username = "Alisindhi_Z073";
 const password = "Alisindhi_Z073";
 const userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36";
